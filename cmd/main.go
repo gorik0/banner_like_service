@@ -6,6 +6,8 @@ import (
 	"baner_service/internal/config"
 	"baner_service/internal/db"
 	"context"
+	"fmt"
+	"net/http"
 	"os"
 	"os/signal"
 	"time"
@@ -27,9 +29,13 @@ func main() {
 	connDbCtx, cancelFunc := context.WithTimeout(ctx, cfg.Cancel*time.Second)
 	defer cancelFunc()
 	db, err := db.NewPostgres(connDbCtx, cfg.DBConnect)
-
+	HandleErr(err, "init db")
 	//	::: SERVER setup
 
+	server := http.Server{
+		Addr:    fmt.Sprintf(":" + cfg.Port),
+		Handler: router.New,
+	}
 	//::: server shutdown
 
 	//::: server run
