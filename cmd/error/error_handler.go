@@ -4,7 +4,7 @@ import "log"
 
 func HandleErr(err error, msg string) {
 	if err != nil {
-		log.Fatalf("%s ::: %w", msg, err)
+		log.Fatalf("%s ::: %s", msg, err)
 		return
 	}
 	return

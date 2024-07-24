@@ -5,9 +5,11 @@ import (
 	"baner_service/internal/db"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/go-chi/cors"
+	"log"
 	"net/http"
 	"strconv"
 )
@@ -29,16 +31,21 @@ func (h Handler) GetUsewrBanner(w http.ResponseWriter, r *http.Request) {
 
 	if tagIdStr == "" || featureIdStr == "" {
 		w.WriteHeader(http.StatusBadRequest)
+		fmt.Fprint(w, "Missing tag_id or feature_id+err.Error()")
 		return
 	}
 
 	tagId, err := strconv.Atoi(tagIdStr)
 	if err != nil {
 		w.WriteHeader(http.StatusBadRequest)
+		fmt.Fprint(w, "error parsing tag_id"+err.Error())
+		return
 	}
 	featureId, err := strconv.Atoi(featureIdStr)
 	if err != nil {
 		w.WriteHeader(http.StatusBadRequest)
+		fmt.Fprint(w, "error parsing feature_id"+err.Error())
+		return
 	}
 
 	key := tagIdStr + featureIdStr
@@ -50,7 +57,7 @@ func (h Handler) GetUsewrBanner(w http.ResponseWriter, r *http.Request) {
 		gotta, err := h.redis.GetFrom(r.Context(), key)
 		if err != nil {
 			w.WriteHeader(http.StatusInternalServerError)
-
+			fmt.Fprint(w, "error getting from redis"+err.Error())
 			return
 		}
 		if gotta != "" {
@@ -64,12 +71,16 @@ func (h Handler) GetUsewrBanner(w http.ResponseWriter, r *http.Request) {
 	bannerStr, err := h.db.GetUserBanner(r.Context(), featureId, tagId)
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
+		fmt.Fprint(w, "error getting banner"+err.Error())
+
 		return
 	}
 
 	err = h.redis.SetTo(r.Context(), key, bannerStr)
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
+		fmt.Fprint(w, "set to redis"+err.Error())
+
 		return
 	}
 	w.WriteHeader(http.StatusOK)
@@ -88,7 +99,7 @@ func (h Handler) GetAdminBanner(w http.ResponseWriter, r *http.Request) {
 
 	var tagId, featureId, offset, limit int
 	var err error
-	if tagIdStr == "" || featureIdStr == "" || limitStr == "" || offsetStr == "" {
+	if tagIdStr != "" || featureIdStr != "" || limitStr != "" || offsetStr != "" {
 		tagId, err = strconv.Atoi(tagIdStr)
 		featureId, err = strconv.Atoi(featureIdStr)
 		offset, err = strconv.Atoi(offsetStr)
@@ -103,6 +114,7 @@ func (h Handler) GetAdminBanner(w http.ResponseWriter, r *http.Request) {
 
 	//	::: GET from db
 	banners, err := h.db.GetAdminBanner(r.Context(), tagId, featureId, offset, limit)
+	log.Println("ALL BANNERS ::: ", banners)
 	bannersByte, err := json.Marshal(banners)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
@@ -118,19 +130,22 @@ func (h Handler) GetAdminBanner(w http.ResponseWriter, r *http.Request) {
 func (h Handler) PostBanner(w http.ResponseWriter, r *http.Request) {
 	// :::: DECODE request body
 
-	var banner *db.Banner
+	var banner db.Banner
 	err := json.NewDecoder(r.Body).Decode(&banner)
 	if err != nil {
+		println("decode" + err.Error())
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
-	if banner == nil {
-		http.Error(w, errors.New("nill banner").Error(), http.StatusBadRequest)
-		return
-	}
+	log.Println(banner)
+	//if banner == nil {
+	//	http.Error(w, errors.New("nill banner").Error(), http.StatusBadRequest)
+	//	return
+	//}
 	//	::: create in db
-	err = h.db.PostBanner(r.Context(), banner)
+	err = h.db.PostBanner(r.Context(), &banner)
 	if err != nil {
+		println("create in db" + err.Error())
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
@@ -159,7 +174,7 @@ func (h Handler) UpdateBanner(w http.ResponseWriter, r *http.Request) {
 		return
 
 	}
-	err = h.db.UpdateBanner(r.Context(), banner, idInt)
+	err = h.db.UpdateBanner(r.Context(), banner, idInt, &banner.IsActive)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
@@ -221,7 +236,7 @@ func Register(redis *cache.Cache, db *db.Postgres, userToken, adminToken string)
 	//				:::: user one
 	r.Group(func(r chi.Router) {
 		r.Use(guard(userToken))
-		r.Get("/banner", handler.GetUsewrBanner)
+		r.Get("/user-banner", handler.GetUsewrBanner)
 
 	})
 
@@ -244,6 +259,7 @@ func guard(tokens ...string) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			token := r.Header.Get("token")
+			println("TOKEN ::: ", tokens)
 			for _, t := range tokens {
 				if t == token {
 					next.ServeHTTP(w, r)
@@ -258,7 +274,7 @@ func guard(tokens ...string) func(http.Handler) http.Handler {
 
 func isAuth(handler http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if token := r.Header.Get("token"); token != "" {
+		if token := r.Header.Get("token"); token == "" {
 			w.WriteHeader(http.StatusUnauthorized)
 			return
 		} else {

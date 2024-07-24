@@ -2,6 +2,7 @@ package main
 
 import (
 	. "baner_service/cmd/error"
+	"baner_service/cmd/router"
 	"baner_service/internal/cache"
 	"baner_service/internal/config"
 	"baner_service/internal/db"
@@ -34,10 +35,20 @@ func main() {
 
 	server := http.Server{
 		Addr:    fmt.Sprintf(":" + cfg.Port),
-		Handler: router.New,
+		Handler: router.Register(redis, db, cfg.UserToken, cfg.AdminToken),
 	}
 	//::: server shutdown
 
+	go func() {
+		<-ctx.Done()
+		ctxShutdown, cancel := context.WithTimeout(context.Background(), time.Second*15)
+		defer cancel()
+		server.Shutdown(ctxShutdown)
+
+	}()
 	//::: server run
 
+	if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+		HandleErr(err, "server")
+	}
 }

@@ -1,0 +1,26 @@
+version: '3'
+
+services:
+
+  postgres:
+    image: 'postgres:alpine'
+    ports:
+      - "5432:5432"
+    restart: always
+#    deploy:
+#      mode: replicated
+#      replicas: 1
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: password
+      POSTGRES_DB: banner
+    volumes:
+      - ./db-scripts/dev:/docker-entrypoint-initdb.d
+
+
+
+  redis:
+    image: redis:latest
+    restart: always
+    ports:
+      - "6379:6379"

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/jackc/pgx/v5"
+	"log"
 	"strconv"
 	"strings"
 	"time"
@@ -14,6 +15,17 @@ type Postgres struct {
 	db *pgx.Conn
 }
 
+/*
+[
+"banner_id":0,
+"tag_ids":0,
+"feature_id":0,
+"content":0,
+"is_active":0,
+"created_at":0,
+"updated_at":0
+]
+*/
 type Banner struct {
 	Id        int                    `json:"banner_id"`
 	TagIds    []int                  `json:"tag_ids"`
@@ -71,22 +83,23 @@ func (p *Postgres) GetAdminBanner(ctx context.Context, feature_id, tag_id, limit
 	//	:::: MAKE query!
 
 	rows, err := p.db.Query(ctx, stmt, args...)
+	log.Println("STMT ::: :", stmt)
 	if err != nil {
 		return nil, err
 	}
 	var banners []*Banner
 	for rows.Next() {
-		var b *Banner
+		var b Banner
 
 		var tagIds []int
-		err = rows.Scan(&b.Id, b.FeatureID, b.Content, b.IsActive, b.CreatedAt, b.UpdatedAt, tagIds)
+		err = rows.Scan(&b.Id, &b.FeatureID, &b.Content, &b.IsActive, &b.CreatedAt, &b.UpdatedAt, &tagIds)
 		if err != nil {
 			return nil, err
 		}
 
 		b.TagIds = tagIds
 
-		banners = append(banners, b)
+		banners = append(banners, &b)
 
 	}
 	return banners, nil
@@ -115,7 +128,7 @@ func (p *Postgres) PostBanner(ctx context.Context, banner *Banner) error {
 	if err != nil {
 		return err
 	}
-	stmt = `INSERT INTO banners_tags (tag_id,banner_id) values $1`
+	stmt = `INSERT INTO banners_tags (tag_id,banner_id) values ($1,$2)`
 	//	::: INSERT tags_id
 	for _, id := range banner.TagIds {
 		_, err = p.db.Exec(ctx, stmt, id, bannerId)
