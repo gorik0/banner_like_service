@@ -151,7 +151,7 @@ func (p *Postgres) UpdateBanner(ctx context.Context, banner *Banner, id int, isA
 	var args = make([]interface{}, 0)
 	if len(banner.Content) > 0 {
 
-		updateParamsStmt = append(updateParamsStmt, "content="+strconv.Itoa(updateParamsCount))
+		updateParamsStmt = append(updateParamsStmt, "content= $"+strconv.Itoa(updateParamsCount))
 		content, err := json.Marshal(banner.Content)
 		if err != nil {
 			return err
@@ -163,31 +163,36 @@ func (p *Postgres) UpdateBanner(ctx context.Context, banner *Banner, id int, isA
 	}
 	if banner.FeatureID != 0 {
 
-		updateParamsStmt = append(updateParamsStmt, "content="+strconv.Itoa(updateParamsCount))
+		updateParamsStmt = append(updateParamsStmt, "feature_id= $"+strconv.Itoa(updateParamsCount))
 		args = append(args, banner.FeatureID)
 
 		updateParamsCount++
 	}
 	if isActive != nil {
 
-		updateParamsStmt = append(updateParamsStmt, "isActive="+strconv.Itoa(updateParamsCount))
+		updateParamsStmt = append(updateParamsStmt, "is_active= $"+strconv.Itoa(updateParamsCount))
 		args = append(args, isActive)
 
 		updateParamsCount++
 	}
-	updateParamsStmt = append(updateParamsStmt, "content="+strconv.Itoa(updateParamsCount))
+	updateParamsStmt = append(updateParamsStmt, "updated_at= $"+strconv.Itoa(updateParamsCount))
 	args = append(args, time.Now())
 
 	updateParamsCount++
 
 	//	::: UPdate
 	stmt += strings.Join(updateParamsStmt, ", ")
+	stmt += ` WHERE id=$` + strconv.Itoa(updateParamsCount)
+	args = append(args, id)
 
+	log.Println("ARGS ::: ", args)
+	log.Println("ARGS ::: ", stmt)
 	_, err := p.db.Exec(ctx, stmt, args...)
 	if err != nil {
 		return err
 	}
 	stmt = `delete from banners_tags  where banner_id = $1`
+
 	_, err = p.db.Exec(ctx, stmt, id)
 	if err != nil {
 		return err
@@ -227,7 +232,7 @@ func (p *Postgres) DeleteBanner(ctx context.Context, id int) error {
 	}
 
 	//	:::: DELETE tags
-	stmt = `DELETE FROM banners where banner_id = $1`
+	stmt = `DELETE FROM banners where id = $1`
 
 	_, err = p.db.Exec(ctx, stmt, id)
 	if err != nil {
